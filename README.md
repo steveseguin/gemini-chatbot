@@ -1,4 +1,4 @@
-# Gemini Vision Chat
+# Gemini live chat with Vision👁️ + Audio👂🔊 + Text💬 support
 
 A real-time video chat interface powered by Google's Gemini Vision AI, enabling live video analysis and natural language processing capabilities.
 
