@@ -77,6 +77,21 @@ button {
 button:hover {
     background: #5865f2;
 }
+#startButton {
+    background: #22c55e;
+    font-size: 16px;
+    padding: 10px 20px;
+    font-weight: 600;
+    animation: pulse 2s infinite;
+}
+#startButton:hover {
+    background: #16a34a;
+}
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
 .api-key.highlight {
     border-color: #ff6b6b;
     outline: none;
@@ -175,14 +190,24 @@ button:hover {
 <body>
     <div class="left-panel">
         <div class="controls">
-            <select id="videoSource"></select>
-            <select id="audioSource"></select>
-            <button id="startButton">Start Stream</button>
+			<select id="videoSource"></select>
+			<select id="audioSource"></select>
+			<button id="startButton">Start Stream</button>
+			<select id="responseType">
+				<option value="text">Text Response</option>
+				<option value="audio">Audio Response</option>
+			</select>
+			<select id="voiceSelect" style="display: none;">
+				<option value="Aoede">Female Voice 1 (Aoede)</option>
+				<option value="Kore">Female Voice 2 (Kore)</option>
+				<option value="Puck">Male Voice 1 (Puck)</option>
+				<option value="Charon">Male Voice 2 (Charon)</option>
+				<option value="Fenrir">Male Voice 3 (Fenrir)</option>
+			</select>
 			<div class="api-key-container">
-				<input type="password" id="apiKey" placeholder="Enter Gemini API Key" size="30" class="api-key">
+				<input type="password" id="apiKey" placeholder="Enter Gemini API Key" size="15" class="api-key">
 				<div class="api-key-info">
-					Get your free Gemini API key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>. 
-					Keep your key private.
+					Get your free Gemini API key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>.
 				</div>
 			</div>        </div>
         <div id="error"></div>
@@ -197,308 +222,505 @@ button:hover {
             </div>
         </div>
     </div>
-    <script>
-	
+<script>
 class GoogleLivePublisher {
-  constructor(stream, apiKey) {
-    this.stream = stream;
-    this.apiKey = apiKey;
-    this.ws = null;
-    this.audioContext = null;
-    this.videoProcessor = null;
-    this.canvasContext = null;
-    this.lastImageTime = 0;
-    this.imageInterval = 200;
-    this.imageWidth = 640;
-    this.imageHeight = 360;
-    this.handleMessage = this.handleMessage.bind(this);
-  }
-  async handleMessage(event) {
-    try {
-      let response;
-      if (event.data instanceof Blob) {
-        const text = await event.data.text();
-        console.log('Received blob response:', text);
-        response = JSON.parse(text);
-      } else {
-        console.log('Received string response:', event.data);
-        response = JSON.parse(event.data);
-      }
-      if (response.setupComplete) {
-        console.log('Setup complete received');
-        this.sendPrompt("Hi, introduce yourself in a sentence for me. Be friendly to me.");
-      }
-      if (response.serverContent?.modelTurn?.parts) {
-        const parts = response.serverContent.modelTurn.parts;
-        parts.forEach(part => {
-          if (part.text) {
-            console.log('Model response:', part.text);
-            const event = new CustomEvent('modelResponse', {
-              detail: {
-                text: part.text
-              }
+    constructor(stream, apiKey) {
+        this.stream = stream;
+        this.apiKey = apiKey;
+        this.ws = null;
+        this.audioContext = null;
+        this.videoProcessor = null;
+        this.canvasContext = null;
+        this.lastImageTime = 0;
+        this.imageInterval = 200;
+        this.imageWidth = 640;
+        this.imageHeight = 360;
+        this.handleMessage = this.handleMessage.bind(this);
+        this.audioPlayer = new AudioPlayer();
+    }
+    async handleMessage(event) {
+        try {
+            let response;
+            if (event.data instanceof Blob) {
+                const text = await event.data.text();
+                response = JSON.parse(text);
+            } else {
+                response = JSON.parse(event.data);
+            }
+            if (response.setupComplete) {
+                console.log('Setup complete received');
+                this.sendPrompt("Hi, introduce yourself in a sentence for me. Be friendly to me.");
+            }
+            if (response.serverContent?.modelTurn?.parts) {
+                const parts = response.serverContent.modelTurn.parts;
+                let hasAudioParts = false;
+                parts.forEach(part => {
+                    if (part.text) {
+                        console.log('Model response:', part.text);
+                        const event = new CustomEvent('modelResponse', {
+                            detail: {
+                                text: part.text
+                            }
+                        });
+                        window.dispatchEvent(event);
+                    }
+                    if (part.inlineData && part.inlineData.mimeType.startsWith('audio/')) {
+                        hasAudioParts = true;
+                        console.log('Received audio response with mime type:', part.inlineData.mimeType);
+                        try {
+                            const rateMatch = part.inlineData.mimeType.match(/rate=(\d+)/);
+                            const sampleRate = rateMatch ? parseInt(rateMatch[1]) : 24000;
+                            this.audioPlayer.resume();
+                            const audioData = base64ToArrayBuffer(part.inlineData.data);
+                            console.log('Processing audio chunk of size:', audioData.byteLength);
+                            this.audioPlayer.addPCM16(new Uint8Array(audioData));
+                        } catch (err) {
+                            console.error('Error processing audio:', err);
+                        }
+                    }
+                });
+                if (response.serverContent.turnComplete && hasAudioParts) {
+                    console.log('Turn complete, finalizing audio');
+                    this.audioPlayer.complete();
+                }
+            }
+            if (!response.setupComplete && !response.serverContent) {
+                console.log('Other response type:', response);
+            }
+        } catch (err) {
+            console.error('Error handling message:', err);
+        }
+    }
+    sendPrompt(text) {
+        if (!this.isConnected()) {
+            console.error('WebSocket not connected, attempting reconnect...');
+            this.connect().then(() => {
+                this._sendPromptInternal(text);
             });
-            window.dispatchEvent(event);
-          }
-        });
-      }
-      if (!response.setupComplete && !response.serverContent) {
-        console.log('Other response type:', response);
-      }
-    } catch (err) {
-      console.error('Error handling message:', err);
-    }
-  }
-  sendPrompt(text) {
-    if (!this.isConnected()) {
-      console.error('WebSocket not connected, attempting reconnect...');
-      this.connect().then(() => {
+            return;
+        }
         this._sendPromptInternal(text);
-      });
-      return;
     }
-    this._sendPromptInternal(text);
-  }
-  _sendPromptInternal(text) {
-    if (this.isConnected()) {
-      const message = {
-        clientContent: {
-          turns: [{
-            role: "user",
-            parts: [{
-              text
-            }]
-          }],
-          turnComplete: true
+    _sendPromptInternal(text) {
+        if (this.isConnected()) {
+            const message = {
+                clientContent: {
+                    turns: [{
+                        role: "user",
+                        parts: [{
+                            text
+                        }]
+                    }],
+                    turnComplete: true
+                }
+            };
+            console.log('Sending prompt:', message);
+            this.ws.send(JSON.stringify(message));
+        } else {
+            console.error('WebSocket still not ready after reconnect attempt');
         }
-      };
-      console.log('Sending prompt:', message);
-      this.ws.send(JSON.stringify(message));
-    } else {
-      console.error('WebSocket still not ready after reconnect attempt');
     }
-  }
-  sendMediaChunk(mediaChunks) {
-    if (this.isConnected()) {
-      const message = {
-        realtimeInput: {
-          mediaChunks: mediaChunks.map(chunk => ({
-            mime_type: chunk.inlineData.mimeType,
-            data: chunk.inlineData.data
-          }))
+    sendMediaChunk(mediaChunks) {
+        if (this.ws?.readyState === WebSocket.OPEN) {
+            const message = {
+                realtimeInput: {
+                    mediaChunks: mediaChunks.map(chunk => ({
+                        mimeType: chunk.inlineData.mimeType,
+                        data: chunk.inlineData.data
+                    }))
+                }
+            };
+            this.ws.send(JSON.stringify(message));
         }
-      };
-      this.ws.send(JSON.stringify(message));
     }
-  }
-  isConnected() {
-    return this.ws && this.ws.readyState === WebSocket.OPEN;
-  }
-  async connect() {
-    const host = 'generativelanguage.googleapis.com';
-    const uri = `wss://${host}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${this.apiKey}`;
-    if (this.isConnected()) {
-      console.log('Already connected');
-      return;
+    isConnected() {
+        return this.ws && this.ws.readyState === WebSocket.OPEN;
     }
-    this.ws = new WebSocket(uri);
-    this.ws.onmessage = this.handleMessage;
-    this.ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-    this.ws.onclose = (event) => {
-      console.log('WebSocket closed:', event.code, event.reason);
-    };
-    await new Promise((resolve, reject) => {
-      this.ws.addEventListener('open', resolve, {
-        once: true
-      });
-      this.ws.addEventListener('error', reject, {
-        once: true
-      });
-    });
-    const setupMessage = {
-      setup: {
-        model: "models/gemini-2.0-flash-exp",
-        systemInstruction: {
-          parts: [{
-            text: "You are a friendly and helpful social chat assistant that can see and hear the user."
-          }]
-        },
-        generationConfig: {
-          temperature: 0.9,
-          topK: 1,
-          topP: 1,
-          candidateCount: 1,
-          responseModalities: "text"
+    async connect() {
+        const host = 'generativelanguage.googleapis.com';
+        const uri = `wss://${host}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${this.apiKey}`;
+        if (this.isConnected()) {
+            console.log('Already connected');
+            return;
         }
-      }
-    };
-    console.log('Sending setup message:', setupMessage);
-    this.ws.send(JSON.stringify(setupMessage));
-  }
-  async start() {
-    try {
-      await this.connect();
-      await this.setupAudioProcessing();
-      this.setupVideoProcessing();
-    } catch (err) {
-      console.error('Failed to start:', err);
-      this.stop();
-      throw err;
+        const responseType = document.getElementById('responseType');
+        const voiceSelect = document.getElementById('voiceSelect');
+        voiceSelect.style.display = responseType.value === 'audio' ? 'block' : 'none';
+        this.ws = new WebSocket(uri);
+        this.ws.onmessage = this.handleMessage;
+        this.ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+        this.ws.onclose = (event) => {
+            console.log('WebSocket closed:', event.code, event.reason);
+        };
+        await new Promise((resolve, reject) => {
+            this.ws.addEventListener('open', resolve, {
+                once: true
+            });
+            this.ws.addEventListener('error', reject, {
+                once: true
+            });
+        });
+        const setupMessage = {
+            setup: {
+                model: "models/gemini-2.0-flash-exp",
+                systemInstruction: {
+                    parts: [{
+                        text: "You are a friendly and helpful social chat assistant that can see and hear the user."
+                    }]
+                },
+                generationConfig: {
+                    temperature: 0.9,
+                    topK: 1,
+                    topP: 1,
+                    candidateCount: 1,
+                    responseModalities: responseType.value === 'audio' ? 'AUDIO' : 'TEXT',
+                    ...(responseType.value === 'audio' && {
+                        speechConfig: {
+                            voiceConfig: {
+                                prebuiltVoiceConfig: {
+                                    voiceName: voiceSelect.value
+                                }
+                            }
+                        }
+                    })
+                }
+            }
+        };
+        console.log('Sending setup message:', setupMessage);
+        this.ws.send(JSON.stringify(setupMessage));
     }
-  }
-  async setupAudioProcessing() {
-    this.audioContext = new AudioContext({
-      sampleRate: 16000
-    });
-    const workletBlob = new Blob([`registerProcessor('audio-processor', ${AudioProcessingWorklet})`], {
-      type: 'application/javascript'
-    });
-    const workletUrl = URL.createObjectURL(workletBlob);
-    await this.audioContext.audioWorklet.addModule(workletUrl);
-    URL.revokeObjectURL(workletUrl);
-    const source = this.audioContext.createMediaStreamSource(this.stream);
-    const processor = new AudioWorkletNode(this.audioContext, 'audio-processor');
-    processor.port.onmessage = (event) => {
-      if (event.data.data?.int16arrayBuffer) {
-        const base64Audio = btoa(String.fromCharCode(...new Uint8Array(event.data.data.int16arrayBuffer)));
-        this.sendMediaChunk([{
-          mime_type: "audio/pcm;rate=16000",
-          data: base64Audio
-        }]);
-      }
-    };
-    source.connect(processor);
-  }
-  setupVideoProcessing() {
-    const canvas = document.createElement('canvas');
-    canvas.width = this.imageWidth;
-    canvas.height = this.imageHeight;
-    this.canvasContext = canvas.getContext('2d');
-    const videoTrack = this.stream.getVideoTracks()[0];
-    const videoElement = document.createElement('video');
-    videoElement.srcObject = new MediaStream([videoTrack]);
-    videoElement.autoplay = true;
-    const captureFrame = () => {
-      const now = Date.now();
-      if (now - this.lastImageTime >= this.imageInterval) {
-        this.canvasContext.drawImage(videoElement, 0, 0, this.imageWidth, this.imageHeight);
-        const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-        this.sendMediaChunk([{
-          mime_type: "image/jpeg",
-          data: base64Image
-        }]);
-        this.lastImageTime = now;
-      }
-      if (!this.stopped) {
-        requestAnimationFrame(captureFrame);
-      }
-    };
-    videoElement.addEventListener('loadedmetadata', () => {
-      requestAnimationFrame(captureFrame);
-    });
-  }
-  sendMediaChunk(mediaChunks) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      const message = {
-        realtimeInput: {
-          mediaChunks
+    async start() {
+        try {
+            await this.connect();
+            await this.setupAudioProcessing();
+            this.setupVideoProcessing();
+        } catch (err) {
+            console.error('Failed to start:', err);
+            this.stop();
+            throw err;
         }
-      };
-      this.ws.send(JSON.stringify(message));
     }
-  }
-  stop() {
-    this.stopped = true;
-    this.ws?.close();
-    this.audioContext?.close();
-    this.ws = null;
-    this.audioContext = null;
-    this.videoProcessor = null;
-    this.canvasContext = null;
-  }
+    async setupAudioProcessing() {
+        this.audioContext = new AudioContext({
+            sampleRate: 16000
+        });
+        const workletBlob = new Blob([`registerProcessor('audio-processor', ${AudioProcessingWorklet})`], {
+            type: 'application/javascript'
+        });
+        const workletUrl = URL.createObjectURL(workletBlob);
+        await this.audioContext.audioWorklet.addModule(workletUrl);
+        URL.revokeObjectURL(workletUrl);
+        const source = this.audioContext.createMediaStreamSource(this.stream);
+        const processor = new AudioWorkletNode(this.audioContext, 'audio-processor');
+        processor.port.onmessage = (event) => {
+            if (event.data.data?.int16arrayBuffer) {
+                const base64Audio = btoa(String.fromCharCode(...new Uint8Array(event.data.data.int16arrayBuffer)));
+                this.sendMediaChunk([{
+                    mime_type: "audio/pcm;rate=16000",
+                    data: base64Audio
+                }]);
+            }
+        };
+        source.connect(processor);
+    }
+    setupVideoProcessing() {
+        const canvas = document.createElement('canvas');
+        canvas.width = this.imageWidth;
+        canvas.height = this.imageHeight;
+        this.canvasContext = canvas.getContext('2d');
+        const videoTrack = this.stream.getVideoTracks()[0];
+        const videoElement = document.createElement('video');
+        videoElement.srcObject = new MediaStream([videoTrack]);
+        videoElement.autoplay = true;
+        const captureFrame = () => {
+            const now = Date.now();
+            if (now - this.lastImageTime >= this.imageInterval) {
+                this.canvasContext.drawImage(videoElement, 0, 0, this.imageWidth, this.imageHeight);
+                const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+                this.sendMediaChunk([{
+                    mime_type: "image/jpeg",
+                    data: base64Image
+                }]);
+                this.lastImageTime = now;
+            }
+            if (!this.stopped) {
+                requestAnimationFrame(captureFrame);
+            }
+        };
+        videoElement.addEventListener('loadedmetadata', () => {
+            requestAnimationFrame(captureFrame);
+        });
+    }
+    sendMediaChunk(mediaChunks) {
+        if (this.ws?.readyState === WebSocket.OPEN) {
+            const message = {
+                realtimeInput: {
+                    mediaChunks
+                }
+            };
+            this.ws.send(JSON.stringify(message));
+        }
+    }
+    stop() {
+        this.stopped = true;
+        this.ws?.close();
+        this.audioContext?.close();
+        this.audioPlayer?.stop();
+        this.ws = null;
+        this.audioContext = null;
+        this.videoProcessor = null;
+        this.canvasContext = null;
+    }
+}
+class AudioPlayer {
+    constructor() {
+        this.context = new AudioContext();
+        this.gainNode = this.context.createGain();
+        this.gainNode.connect(this.context.destination);
+        this.gainNode.gain.value = 1;
+        this.bufferSize = 8192 * 4;
+        this.sampleRate = 24000;
+        this.processingBuffer = new Float32Array(0);
+        this.audioQueue = [];
+        this.isPlaying = false;
+        this.scheduledTime = 0;
+        this.currentSource = null;
+        this.silencePadding = 0.015;
+        this.startDelay = 0.05;
+        this.bufferTarget = 3;
+        this.scheduleAheadTime = 0.2;
+        this.minimumBufferSize = this.bufferSize;
+        this.underrunRecoveryTime = 0.2;
+        this.maxBufferSize = this.bufferSize * 8;
+        this.isPaused = false;
+        this.lastPlaybackTime = 0;
+        this.totalScheduledDuration = 0;
+        this.underrunCount = 0;
+        this.lastUnderrunTime = 0;
+        this.adaptiveBufferTarget = this.bufferTarget;
+    }
+    addPCM16(chunk) {
+        const float32Array = new Float32Array(chunk.length / 2);
+        const dataView = new DataView(chunk.buffer);
+        for (let i = 0; i < chunk.length / 2; i++) {
+            float32Array[i] = dataView.getInt16(i * 2, true) / 32768;
+        }
+        const newBuffer = new Float32Array(this.processingBuffer.length + float32Array.length);
+        newBuffer.set(this.processingBuffer);
+        newBuffer.set(float32Array, this.processingBuffer.length);
+        this.processingBuffer = newBuffer;
+        if (this.processingBuffer.length >= this.minimumBufferSize) {
+            const paddedBuffer = this.addSilencePadding(this.processingBuffer);
+            this.audioQueue.push(paddedBuffer);
+            this.processingBuffer = new Float32Array(0);
+            if (!this.isPlaying && this.audioQueue.length >= this.adaptiveBufferTarget) {
+                this.isPlaying = true;
+                this.scheduledTime = this.context.currentTime + (this.initialChunk ? this.startDelay : 0);
+                this.initialChunk = false;
+                this.scheduleNextBuffer();
+            }
+        }
+    }
+    addSilencePadding(audioData) {
+        const paddingSamples = Math.floor(this.silencePadding * this.sampleRate);
+        const crossfadeSamples = Math.min(paddingSamples, Math.floor(this.sampleRate * 0.015));
+        const paddedBuffer = new Float32Array(audioData.length + (paddingSamples * 2));
+        paddedBuffer.set(audioData, paddingSamples);
+        for (let i = 0; i < crossfadeSamples; i++) {
+            const fadeIn = 0.5 * (1 - Math.cos((i / crossfadeSamples) * Math.PI));
+            paddedBuffer[paddingSamples + i] *= fadeIn;
+        }
+        for (let i = 0; i < crossfadeSamples; i++) {
+            const fadeOut = 0.5 * (1 + Math.cos((i / crossfadeSamples) * Math.PI));
+            paddedBuffer[paddingSamples + audioData.length - crossfadeSamples + i] *= fadeOut;
+        }
+        return paddedBuffer;
+    }
+    scheduleNextBuffer() {
+        if (!this.isPlaying || this.isPaused) return;
+        const now = this.context.currentTime;
+        const buffersNeeded = Math.max(0, this.adaptiveBufferTarget - this.audioQueue.length);
+        if (this.audioQueue.length === 0) {
+            this.underrunCount++;
+            this.lastUnderrunTime = Date.now();
+            this.isPaused = true;
+            this.lastPlaybackTime = this.scheduledTime;
+            return;
+        }
+        while (this.audioQueue.length > 0 &&
+            this.scheduledTime < now + this.scheduleAheadTime) {
+            const audioData = this.audioQueue.shift();
+            const audioBuffer = this.createAudioBuffer(audioData);
+            const source = this.context.createBufferSource();
+            source.buffer = audioBuffer;
+            const startTime = Math.max(this.scheduledTime, now);
+            source.connect(this.gainNode);
+            const scheduleOffset = 0.005;
+            source.start(startTime + scheduleOffset);
+            this.currentSource = source;
+            this.scheduledTime = startTime + audioBuffer.duration - this.silencePadding;
+            source.onended = () => {
+                if (this.audioQueue.length > 0) {
+                    requestAnimationFrame(() => this.scheduleNextBuffer());
+                }
+            };
+        }
+        if (this.isPlaying && !this.isPaused) {
+            const nextCheckDelay = Math.max(10,
+                (this.scheduledTime - this.context.currentTime) * 500
+            );
+            setTimeout(() => this.scheduleNextBuffer(), nextCheckDelay);
+        }
+    }
+    createAudioBuffer(audioData) {
+        const audioBuffer = this.context.createBuffer(1, audioData.length, this.sampleRate);
+        audioBuffer.getChannelData(0).set(audioData);
+        return audioBuffer;
+    }
+    stop() {
+        this.complete();
+        setTimeout(() => {
+            this.isPlaying = false;
+            this.isPaused = false;
+            if (this.currentSource) {
+                try {
+                    this.currentSource.stop();
+                } catch (e) {
+                    console.warn('Error stopping current source:', e);
+                }
+                this.currentSource = null;
+            }
+            this.audioQueue = [];
+            this.processingBuffer = new Float32Array(0);
+            this.underrunCount = 0;
+            this.lastUnderrunTime = 0;
+            this.adaptiveBufferTarget = this.bufferTarget;
+            this.initialChunk = true;
+            this.totalScheduledDuration = 0;
+            this.lastPlaybackTime = 0;
+            const currentTime = this.context.currentTime;
+            this.gainNode.gain.setValueAtTime(this.gainNode.gain.value, currentTime);
+            this.gainNode.gain.linearRampToValueAtTime(0, currentTime + 0.2);
+            setTimeout(() => {
+                this.gainNode.disconnect();
+                this.gainNode = this.context.createGain();
+                this.gainNode.connect(this.context.destination);
+            }, 300);
+        }, 500);
+    }
+    complete() {
+        if (this.processingBuffer.length > 0) {
+            const paddedBuffer = this.addSilencePadding(this.processingBuffer);
+            this.audioQueue.push(paddedBuffer);
+            this.processingBuffer = new Float32Array(0);
+        }
+        const endingSilence = new Float32Array(Math.floor(this.sampleRate * 0.2));
+        this.audioQueue.push(endingSilence);
+        if (this.isPlaying) {
+            this.scheduleNextBuffer();
+        } else if (this.audioQueue.length > 0) {
+            this.isPlaying = true;
+            this.scheduledTime = this.context.currentTime + 0.05;
+            this.scheduleNextBuffer();
+        }
+    }
+    async resume() {
+        if (this.context.state === "suspended") {
+            await this.context.resume();
+        }
+        this.gainNode.gain.setValueAtTime(0, this.context.currentTime);
+        this.gainNode.gain.linearRampToValueAtTime(1, this.context.currentTime + 0.1);
+    }
 }
 
+function base64ToArrayBuffer(base64) {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
+}
 class MessageFormatter {
-  constructor() {
-    this.currentMessage = '';
-    this.currentMessageElement = null;
-    this.messageBuffer = '';
-    this.messageComplete = false;
-    this.lastMessageTime = Date.now();
-    this.pauseThreshold = 300;
-  }
-  formatMarkdown(text) {
-    let formatted = text
-      .replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/`(.*?)`/g, '<code>$1</code>');
-    const lines = formatted.split('\n');
-    const formattedLines = lines.map(line => {
-      if (line.trim().startsWith('*') && line.trim()[1] === ' ') {
-        return `<li>${line.trim().substring(2)}</li>`;
-      }
-      if (/^\d+\./.test(line.trim())) {
-        return `<li>${line.trim()}</li>`;
-      }
-      return line;
-    });
-    return formattedLines.join('\n')
-      .replace(/\n\n/g, '<br><br>')
-      .replace(/\n(?![<])/g, '<br>');
-  }
-  appendMessage(text, isUser = false) {
-    const now = Date.now();
-    if (isUser) {
-      const messageDiv = document.createElement('div');
-      messageDiv.className = 'message user-message';
-      const contentDiv = document.createElement('div');
-      contentDiv.className = 'markdown-content';
-      contentDiv.textContent = text;
-      messageDiv.appendChild(contentDiv);
-      responsesDiv.appendChild(messageDiv);
-      this.messageComplete = true;
-      this.scrollToBottom();
-      this.lastMessageTime = now;
-      return;
+    constructor() {
+        this.currentMessage = '';
+        this.currentMessageElement = null;
+        this.messageBuffer = '';
+        this.messageComplete = false;
+        this.lastMessageTime = Date.now();
+        this.pauseThreshold = 300;
     }
-    if (this.currentMessageElement && (now - this.lastMessageTime > this.pauseThreshold)) {
-      this.messageBuffer += '\n';
+    formatMarkdown(text) {
+        let formatted = text
+            .replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/`(.*?)`/g, '<code>$1</code>');
+        const lines = formatted.split('\n');
+        const formattedLines = lines.map(line => {
+            if (line.trim().startsWith('*') && line.trim()[1] === ' ') {
+                return `<li>${line.trim().substring(2)}</li>`;
+            }
+            if (/^\d+\./.test(line.trim())) {
+                return `<li>${line.trim()}</li>`;
+            }
+            return line;
+        });
+        return formattedLines.join('\n')
+            .replace(/\n\n/g, '<br><br>')
+            .replace(/\n(?![<])/g, '<br>');
     }
-    this.messageBuffer += text;
-    this.lastMessageTime = now;
-    if (!this.currentMessageElement) {
-      this.currentMessageElement = document.createElement('div');
-      this.currentMessageElement.className = 'message assistant-message';
-      const contentDiv = document.createElement('div');
-      contentDiv.className = 'markdown-content';
-      this.currentMessageElement.appendChild(contentDiv);
-      responsesDiv.appendChild(this.currentMessageElement);
+    appendMessage(text, isUser = false) {
+        const now = Date.now();
+        if (isUser) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message user-message';
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'markdown-content';
+            contentDiv.textContent = text;
+            messageDiv.appendChild(contentDiv);
+            responsesDiv.appendChild(messageDiv);
+            this.messageComplete = true;
+            this.scrollToBottom();
+            this.lastMessageTime = now;
+            return;
+        }
+        if (this.currentMessageElement && (now - this.lastMessageTime > this.pauseThreshold)) {
+            this.messageBuffer += '\n';
+        }
+        this.messageBuffer += text;
+        this.lastMessageTime = now;
+        if (!this.currentMessageElement) {
+            this.currentMessageElement = document.createElement('div');
+            this.currentMessageElement.className = 'message assistant-message';
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'markdown-content';
+            this.currentMessageElement.appendChild(contentDiv);
+            responsesDiv.appendChild(this.currentMessageElement);
+        }
+        const contentDiv = this.currentMessageElement.querySelector('.markdown-content');
+        contentDiv.innerHTML = this.formatMarkdown(this.messageBuffer);
+        if (
+            this.messageBuffer.match(/\n\n$/) ||
+            this.messageBuffer.match(/[.!?]\s+$/) ||
+            this.messageBuffer.match(/\n\s*[-*]\s.*\n\n$/)
+        ) {
+            this.finalizeMessage();
+        }
+        this.scrollToBottom();
     }
-    const contentDiv = this.currentMessageElement.querySelector('.markdown-content');
-    contentDiv.innerHTML = this.formatMarkdown(this.messageBuffer);
-    if (
-      this.messageBuffer.match(/\n\n$/) ||
-      this.messageBuffer.match(/[.!?]\s+$/) ||
-      this.messageBuffer.match(/\n\s*[-*]\s.*\n\n$/)
-    ) {
-      this.finalizeMessage();
+    finalizeMessage() {
+        this.messageBuffer = '';
+        this.currentMessageElement = null;
+        this.messageComplete = true;
+        this.lastMessageTime = Date.now();
     }
-    this.scrollToBottom();
-  }
-  finalizeMessage() {
-    this.messageBuffer = '';
-    this.currentMessageElement = null;
-    this.messageComplete = true;
-    this.lastMessageTime = Date.now();
-  }
-  scrollToBottom() {
-    responsesDiv.scrollTop = responsesDiv.scrollHeight;
-  }
+    scrollToBottom() {
+        responsesDiv.scrollTop = responsesDiv.scrollHeight;
+    }
 }
-
 const AudioProcessingWorklet = `
 		class AudioProcessor extends AudioWorkletProcessor {
 		  buffer = new Int16Array(2048);
@@ -520,13 +742,11 @@ const AudioProcessingWorklet = `
 			return true;
 		  }
 		}`;
-		
 const messageFormatter = new MessageFormatter();
 window.addEventListener('modelResponse', (event) => {
-  console.log(event.detail.text);
-  messageFormatter.appendMessage(event.detail.text);
+    console.log(event.detail.text);
+    messageFormatter.appendMessage(event.detail.text);
 });
-
 let stream = null;
 const videoSelect = document.getElementById('videoSource');
 const audioSelect = document.getElementById('audioSource');
@@ -536,153 +756,191 @@ const responsesDiv = document.getElementById('responses');
 let publisher = null;
 
 function validateApiKey() {
-  const apiKey = document.getElementById('apiKey').value.trim();
-  startButton.disabled = !apiKey;
-  return apiKey;
+    const apiKey = document.getElementById('apiKey').value.trim();
+    startButton.disabled = !apiKey;
+    return apiKey;
 }
-
 document.getElementById('apiKey').value = localStorage.getItem('apiKey') || '';
 validateApiKey();
 document.getElementById('apiKey').addEventListener('input', validateApiKey);
-
 startButton.addEventListener('click', async () => {
-  const apiKeyInput = document.getElementById('apiKey');
-  const apiKey = apiKeyInput.value.trim();
-  if (!apiKey) {
-    apiKeyInput.classList.add('highlight');
-    setTimeout(() => apiKeyInput.classList.remove('highlight'), 2000);
-    return;
-  }
-  try {
-    if (publisher) {
-      startButton.textContent = 'Starting...';
-      startButton.disabled = true;
-      publisher.stop();
-      publisher = null;
-      preview.srcObject = null;
-      startButton.textContent = 'Start Stream';
-      startButton.disabled = false;
-      return;
+    const apiKeyInput = document.getElementById('apiKey');
+    const apiKey = apiKeyInput.value.trim();
+    if (!apiKey) {
+        apiKeyInput.classList.add('highlight');
+        setTimeout(() => apiKeyInput.classList.remove('highlight'), 2000);
+        return;
     }
-    startButton.textContent = 'Starting...';
-    startButton.disabled = true;
-    const stream = await getStream();
-    preview.srcObject = stream;
-    localStorage.setItem('apiKey', apiKey);
-    publisher = new GoogleLivePublisher(stream, apiKey);
-    await publisher.start();
-    startButton.textContent = 'Stop Stream';
-    startButton.disabled = false;
-  } catch (err) {
-    console.error(err);
-    showError('Failed to start publishing: ' + err.message);
-    startButton.textContent = 'Start Stream';
-    startButton.disabled = false;
-  }
+    try {
+        if (publisher) {
+            startButton.textContent = 'Starting...';
+            startButton.disabled = true;
+            publisher.stop();
+            publisher = null;
+            preview.srcObject = null;
+            startButton.textContent = 'Start Stream';
+            startButton.disabled = false;
+            return;
+        }
+        startButton.textContent = 'Starting...';
+        startButton.disabled = true;
+        const stream = await getStream();
+        preview.srcObject = stream;
+        localStorage.setItem('apiKey', apiKey);
+        publisher = new GoogleLivePublisher(stream, apiKey);
+        await publisher.start();
+        startButton.textContent = 'Stop Stream';
+        startButton.disabled = false;
+    } catch (err) {
+        console.error(err);
+        showError('Failed to start publishing: ' + err.message);
+        startButton.textContent = 'Start Stream';
+        startButton.disabled = false;
+    }
 });
-
 async function getDevices() {
-  try {
-    await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: true
-      })
-      .then(stream => stream.getTracks().forEach(track => track.stop()))
-      .catch(e => console.warn('Permission denied:', e));
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const videoDevices = devices.filter(d => d.kind === 'videoinput');
-    const audioDevices = devices.filter(d => d.kind === 'audioinput');
-    videoDevices.forEach(device => {
-      const option = document.createElement('option');
-      option.value = device.deviceId;
-      option.text = device.label || `Camera ${videoSelect.length + 1}`;
-      videoSelect.appendChild(option);
-    });
-    audioDevices.forEach(device => {
-      const option = document.createElement('option');
-      option.value = device.deviceId;
-      option.text = device.label || `Microphone ${audioSelect.length + 1}`;
-      audioSelect.appendChild(option);
-    });
-  } catch (err) {
-    showError('Failed to get devices: ' + err.message);
-  }
-}
-
-async function getStream() {
-  if (stream) {
-    stream.getTracks().forEach(track => track.stop());
-  }
-  const constraints = {
-    video: {
-      deviceId: videoSelect.value ? {
-        exact: videoSelect.value
-      } : undefined
-    },
-    audio: {
-      deviceId: audioSelect.value ? {
-        exact: audioSelect.value
-      } : undefined
+    try {
+        await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: true
+            })
+            .then(stream => stream.getTracks().forEach(track => track.stop()))
+            .catch(e => console.warn('Permission denied:', e));
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(d => d.kind === 'videoinput');
+        const audioDevices = devices.filter(d => d.kind === 'audioinput');
+        videoDevices.forEach(device => {
+            const option = document.createElement('option');
+            option.value = device.deviceId;
+            option.text = device.label || `Camera ${videoSelect.length + 1}`;
+            videoSelect.appendChild(option);
+        });
+        audioDevices.forEach(device => {
+            const option = document.createElement('option');
+            option.value = device.deviceId;
+            option.text = device.label || `Microphone ${audioSelect.length + 1}`;
+            audioSelect.appendChild(option);
+        });
+    } catch (err) {
+        showError('Failed to get devices: ' + err.message);
     }
-  };
-  try {
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
-    preview.srcObject = stream;
-    return stream;
-  } catch (err) {
-    showError('Failed to get stream: ' + err.message);
-    throw err;
-  }
+}
+async function getStream() {
+    if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+    }
+    const constraints = {
+        video: {
+            deviceId: videoSelect.value ? {
+                exact: videoSelect.value
+            } : undefined
+        },
+        audio: {
+            deviceId: audioSelect.value ? {
+                exact: audioSelect.value
+            } : undefined
+        }
+    };
+    try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        preview.srcObject = stream;
+        return stream;
+    } catch (err) {
+        showError('Failed to get stream: ' + err.message);
+        throw err;
+    }
 }
 
 function showError(message) {
-  errorDisplay.textContent = message;
+    errorDisplay.textContent = message;
 }
-
 if (!navigator.mediaDevices?.getUserMedia) {
-  showError('getUserMedia not supported');
+    showError('getUserMedia not supported');
 } else {
-  navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: true
-    })
-    .then(initialStream => {
-      initialStream.getTracks().forEach(track => track.stop());
-      getDevices();
-    })
-    .catch(err => showError('Initial permission request failed: ' + err.message));
-  navigator.mediaDevices.addEventListener('devicechange', getDevices);
+    navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true
+        })
+        .then(initialStream => {
+            initialStream.getTracks().forEach(track => track.stop());
+            getDevices();
+        })
+        .catch(err => showError('Initial permission request failed: ' + err.message));
+    navigator.mediaDevices.addEventListener('devicechange', getDevices);
 }
-
 const messageInput = document.querySelector('.message-input');
 const sendButton = document.querySelector('#sendButton');
 responsesDiv.parentElement.insertBefore(messageInput, responsesDiv);
 responsesDiv.parentElement.insertBefore(sendButton, responsesDiv);
-
 sendButton.addEventListener('click', async () => {
-  if (!publisher) {
-    showError('Please start the stream first');
-    return;
-  }
-  if (messageInput.value.trim()) {
-    try {
-      messageFormatter.appendMessage(messageInput.value, true);
-      await publisher.sendPrompt(messageInput.value);
-      messageInput.value = '';
-    } catch (err) {
-      console.error('Failed to send message:', err);
-      showError('Failed to send message: ' + err.message);
+    if (!publisher) {
+        showError('Please start the stream first');
+        return;
     }
-  }
+    if (messageInput.value.trim()) {
+        try {
+            messageFormatter.appendMessage(messageInput.value, true);
+            await publisher.sendPrompt(messageInput.value);
+            messageInput.value = '';
+        } catch (err) {
+            console.error('Failed to send message:', err);
+            showError('Failed to send message: ' + err.message);
+        }
+    }
 });
-
+document.getElementById('voiceSelect').addEventListener('change', async () => {
+    if (publisher && startButton.textContent === 'Stop Stream') {
+        startButton.textContent = 'Starting...';
+        startButton.disabled = true;
+        publisher.stop();
+        publisher = null;
+        try {
+            const stream = await getStream();
+            preview.srcObject = stream;
+            const apiKey = document.getElementById('apiKey').value;
+            publisher = new GoogleLivePublisher(stream, apiKey);
+            await publisher.start();
+            startButton.textContent = 'Stop Stream';
+            startButton.disabled = false;
+        } catch (err) {
+            console.error(err);
+            showError('Failed to restart with new voice: ' + err.message);
+            startButton.textContent = 'Start Stream';
+            startButton.disabled = false;
+        }
+    }
+});
+document.getElementById('responseType').addEventListener('change', function() {
+    const voiceSelect = document.getElementById('voiceSelect');
+    voiceSelect.style.display = this.value === 'audio' ? 'block' : 'none';
+    if (publisher && startButton.textContent === 'Stop Stream') {
+        startButton.textContent = 'Starting...';
+        startButton.disabled = true;
+        publisher.stop();
+        publisher = null;
+        (async () => {
+            try {
+                const stream = await getStream();
+                preview.srcObject = stream;
+                const apiKey = document.getElementById('apiKey').value;
+                publisher = new GoogleLivePublisher(stream, apiKey);
+                await publisher.start();
+                startButton.textContent = 'Stop Stream';
+                startButton.disabled = false;
+            } catch (err) {
+                console.error(err);
+                showError('Failed to restart with new response type: ' + err.message);
+                startButton.textContent = 'Start Stream';
+                startButton.disabled = false;
+            }
+        })();
+    }
+});
 messageInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') {
-    sendButton.click();
-  }
+    if (e.key === 'Enter') {
+        sendButton.click();
+    }
 });
-
 </script>
 </body>
 </html>
-
