@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Vision Chat - Live AI Video Conversations</title>
+    <meta name="description" content="Experience real-time AI video conversations with Google's Gemini Vision AI. This interactive demo showcases live video analysis and natural language processing capabilities.">
+    <meta name="keywords" content="Gemini AI, video chat, AI assistant, Google AI, computer vision, real-time AI">
+    <meta name="robots" content="index, follow">
+    <meta property="og:title" content="Gemini Vision Chat">
+    <meta property="og:description" content="Live video conversations with Google's Gemini Vision AI">
+    <meta property="og:type" content="website">
+    <meta name="author" content="Steve Seguin">
+    <link rel="me" href="https://github.com/steveseguin">
+    <meta property="article:author" content="https://github.com/steveseguin">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnMSIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3R5bGU9InN0b3AtY29sb3I6IzQwNEVFRCIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3R5bGU9InN0b3AtY29sb3I6IzU4NjVGMiIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxwYXRoIGQ9Ik04IDhoNDh2MzhIMjJMOCA1NlY4eiIgZmlsbD0idXJsKCNnMSkiLz48cGF0aCBkPSJNMjAgMjhoMjRNMjAgMjBoMjRNMjAgMzZoMTYiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSI0OCIgY3k9IjM2IiByPSIzIiBmaWxsPSIjZmZmIi8+PC9zdmc+">
+<style>
+body {
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    height: 100vh;
+    box-sizing: border-box;
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #1a1a1a;
+    color: #e0e0e0;
+}
+p {
+    display: inline-block;
+}
+.left-panel {
+    width: 50%;
+    padding-right: 20px;
+}
+.right-panel {
+    width: 50%;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+.controls {
+    margin-bottom: 20px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.preview {
+    width: 100%;
+    max-height: calc(100vh - 200px);
+    object-fit: contain;
+    border-radius: 12px;
+    background: #2a2a2a;
+}
+#error {
+    color: #ff6b6b;
+    margin: 10px 0;
+}
+select, button, .api-key, .message-input {
+    background: #2a2a2a;
+    border: 1px solid #404040;
+    color: #e0e0e0;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+select:hover, button:hover {
+    background: #333;
+    border-color: #505050;
+}
+button {
+    cursor: pointer;
+    background: #404eed;
+    border: none;
+    font-weight: 500;
+}
+button:hover {
+    background: #5865f2;
+}
+.api-key.highlight {
+    border-color: #ff6b6b;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.3);
+}
+.api-key-container {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+}
+.api-key-info {
+    font-size: 13px;
+    color: #a0a0a0;
+	margin: auto;
+}
+.api-key-info a {
+    color: #5865f2;
+    text-decoration: none;
+}
+.api-key-info a:hover {
+    text-decoration: underline;
+}
+#startButton:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #2a2a2a;
+}
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: #2a2a2a;
+    border-radius: 12px;
+    overflow: hidden;
+}
+.responses {
+    flex-grow: 1;
+    padding: 16px;
+    background: #2a2a2a;
+    overflow-y: auto;
+    margin-bottom: 10px;
+}
+.input-container {
+    display: flex;
+    gap: 10px;
+    padding: 16px;
+    background: #232323;
+    border-top: 1px solid #404040;
+}
+.message {
+    margin: 8px 0;
+    padding: 12px;
+    border-radius: 8px;
+    line-height: 1.5;
+}
+.user-message {
+    background: #404eed;
+    margin-left: 20px;
+    color: #fff;
+}
+.assistant-message {
+    background: #333;
+    margin-right: 20px;
+}
+.markdown-content {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+.markdown-content li {
+    margin-left: 20px;
+    margin-bottom: 5px;
+}
+.markdown-content code {
+    background: #232323;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: ui-monospace, monospace;
+    font-size: 0.9em;
+}
+.responses::-webkit-scrollbar {
+    width: 8px;
+}
+.responses::-webkit-scrollbar-track {
+    background: #232323;
+    border-radius: 4px;
+}
+.responses::-webkit-scrollbar-thumb {
+    background: #404040;
+    border-radius: 4px;
+}
+.responses::-webkit-scrollbar-thumb:hover {
+    background: #505050;
+}
+</style>
+</head>
+<body>
+    <div class="left-panel">
+        <div class="controls">
+            <select id="videoSource"></select>
+            <select id="audioSource"></select>
+            <button id="startButton">Start Stream</button>
+			<div class="api-key-container">
+				<input type="password" id="apiKey" placeholder="Enter Gemini API Key" size="30" class="api-key">
+				<div class="api-key-info">
+					Get your free Gemini API key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>. 
+					Keep your key private.
+				</div>
+			</div>        </div>
+        <div id="error"></div>
+        <video class="preview" id="preview" autoplay muted></video>
+    </div>
+    <div class="right-panel">
+        <div class="chat-container">
+            <div id="responses" class="responses"></div>
+            <div class="input-container">
+                <input type="text" class="message-input" placeholder="Type a message...">
+                <button id="sendButton">Send</button>
+            </div>
+        </div>
+    </div>
+    <script>
+	
+class GoogleLivePublisher {
+  constructor(stream, apiKey) {
+    this.stream = stream;
+    this.apiKey = apiKey;
+    this.ws = null;
+    this.audioContext = null;
+    this.videoProcessor = null;
+    this.canvasContext = null;
+    this.lastImageTime = 0;
+    this.imageInterval = 200;
+    this.imageWidth = 640;
+    this.imageHeight = 360;
+    this.handleMessage = this.handleMessage.bind(this);
+  }
+  async handleMessage(event) {
+    try {
+      let response;
+      if (event.data instanceof Blob) {
+        const text = await event.data.text();
+        console.log('Received blob response:', text);
+        response = JSON.parse(text);
+      } else {
+        console.log('Received string response:', event.data);
+        response = JSON.parse(event.data);
+      }
+      if (response.setupComplete) {
+        console.log('Setup complete received');
+        this.sendPrompt("Hi, introduce yourself in a sentence for me. Be friendly to me.");
+      }
+      if (response.serverContent?.modelTurn?.parts) {
+        const parts = response.serverContent.modelTurn.parts;
+        parts.forEach(part => {
+          if (part.text) {
+            console.log('Model response:', part.text);
+            const event = new CustomEvent('modelResponse', {
+              detail: {
+                text: part.text
+              }
+            });
+            window.dispatchEvent(event);
+          }
+        });
+      }
+      if (!response.setupComplete && !response.serverContent) {
+        console.log('Other response type:', response);
+      }
+    } catch (err) {
+      console.error('Error handling message:', err);
+    }
+  }
+  sendPrompt(text) {
+    if (!this.isConnected()) {
+      console.error('WebSocket not connected, attempting reconnect...');
+      this.connect().then(() => {
+        this._sendPromptInternal(text);
+      });
+      return;
+    }
+    this._sendPromptInternal(text);
+  }
+  _sendPromptInternal(text) {
+    if (this.isConnected()) {
+      const message = {
+        clientContent: {
+          turns: [{
+            role: "user",
+            parts: [{
+              text
+            }]
+          }],
+          turnComplete: true
+        }
+      };
+      console.log('Sending prompt:', message);
+      this.ws.send(JSON.stringify(message));
+    } else {
+      console.error('WebSocket still not ready after reconnect attempt');
+    }
+  }
+  sendMediaChunk(mediaChunks) {
+    if (this.isConnected()) {
+      const message = {
+        realtimeInput: {
+          mediaChunks: mediaChunks.map(chunk => ({
+            mime_type: chunk.inlineData.mimeType,
+            data: chunk.inlineData.data
+          }))
+        }
+      };
+      this.ws.send(JSON.stringify(message));
+    }
+  }
+  isConnected() {
+    return this.ws && this.ws.readyState === WebSocket.OPEN;
+  }
+  async connect() {
+    const host = 'generativelanguage.googleapis.com';
+    const uri = `wss://${host}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${this.apiKey}`;
+    if (this.isConnected()) {
+      console.log('Already connected');
+      return;
+    }
+    this.ws = new WebSocket(uri);
+    this.ws.onmessage = this.handleMessage;
+    this.ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+    this.ws.onclose = (event) => {
+      console.log('WebSocket closed:', event.code, event.reason);
+    };
+    await new Promise((resolve, reject) => {
+      this.ws.addEventListener('open', resolve, {
+        once: true
+      });
+      this.ws.addEventListener('error', reject, {
+        once: true
+      });
+    });
+    const setupMessage = {
+      setup: {
+        model: "models/gemini-2.0-flash-exp",
+        systemInstruction: {
+          parts: [{
+            text: "You are a friendly and helpful social chat assistant that can see and hear the user."
+          }]
+        },
+        generationConfig: {
+          temperature: 0.9,
+          topK: 1,
+          topP: 1,
+          candidateCount: 1,
+          responseModalities: "text"
+        }
+      }
+    };
+    console.log('Sending setup message:', setupMessage);
+    this.ws.send(JSON.stringify(setupMessage));
+  }
+  async start() {
+    try {
+      await this.connect();
+      await this.setupAudioProcessing();
+      this.setupVideoProcessing();
+    } catch (err) {
+      console.error('Failed to start:', err);
+      this.stop();
+      throw err;
+    }
+  }
+  async setupAudioProcessing() {
+    this.audioContext = new AudioContext({
+      sampleRate: 16000
+    });
+    const workletBlob = new Blob([`registerProcessor('audio-processor', ${AudioProcessingWorklet})`], {
+      type: 'application/javascript'
+    });
+    const workletUrl = URL.createObjectURL(workletBlob);
+    await this.audioContext.audioWorklet.addModule(workletUrl);
+    URL.revokeObjectURL(workletUrl);
+    const source = this.audioContext.createMediaStreamSource(this.stream);
+    const processor = new AudioWorkletNode(this.audioContext, 'audio-processor');
+    processor.port.onmessage = (event) => {
+      if (event.data.data?.int16arrayBuffer) {
+        const base64Audio = btoa(String.fromCharCode(...new Uint8Array(event.data.data.int16arrayBuffer)));
+        this.sendMediaChunk([{
+          mime_type: "audio/pcm;rate=16000",
+          data: base64Audio
+        }]);
+      }
+    };
+    source.connect(processor);
+  }
+  setupVideoProcessing() {
+    const canvas = document.createElement('canvas');
+    canvas.width = this.imageWidth;
+    canvas.height = this.imageHeight;
+    this.canvasContext = canvas.getContext('2d');
+    const videoTrack = this.stream.getVideoTracks()[0];
+    const videoElement = document.createElement('video');
+    videoElement.srcObject = new MediaStream([videoTrack]);
+    videoElement.autoplay = true;
+    const captureFrame = () => {
+      const now = Date.now();
+      if (now - this.lastImageTime >= this.imageInterval) {
+        this.canvasContext.drawImage(videoElement, 0, 0, this.imageWidth, this.imageHeight);
+        const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+        this.sendMediaChunk([{
+          mime_type: "image/jpeg",
+          data: base64Image
+        }]);
+        this.lastImageTime = now;
+      }
+      if (!this.stopped) {
+        requestAnimationFrame(captureFrame);
+      }
+    };
+    videoElement.addEventListener('loadedmetadata', () => {
+      requestAnimationFrame(captureFrame);
+    });
+  }
+  sendMediaChunk(mediaChunks) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      const message = {
+        realtimeInput: {
+          mediaChunks
+        }
+      };
+      this.ws.send(JSON.stringify(message));
+    }
+  }
+  stop() {
+    this.stopped = true;
+    this.ws?.close();
+    this.audioContext?.close();
+    this.ws = null;
+    this.audioContext = null;
+    this.videoProcessor = null;
+    this.canvasContext = null;
+  }
+}
+
+class MessageFormatter {
+  constructor() {
+    this.currentMessage = '';
+    this.currentMessageElement = null;
+    this.messageBuffer = '';
+    this.messageComplete = false;
+    this.lastMessageTime = Date.now();
+    this.pauseThreshold = 300;
+  }
+  formatMarkdown(text) {
+    let formatted = text
+      .replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/`(.*?)`/g, '<code>$1</code>');
+    const lines = formatted.split('\n');
+    const formattedLines = lines.map(line => {
+      if (line.trim().startsWith('*') && line.trim()[1] === ' ') {
+        return `<li>${line.trim().substring(2)}</li>`;
+      }
+      if (/^\d+\./.test(line.trim())) {
+        return `<li>${line.trim()}</li>`;
+      }
+      return line;
+    });
+    return formattedLines.join('\n')
+      .replace(/\n\n/g, '<br><br>')
+      .replace(/\n(?![<])/g, '<br>');
+  }
+  appendMessage(text, isUser = false) {
+    const now = Date.now();
+    if (isUser) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'message user-message';
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'markdown-content';
+      contentDiv.textContent = text;
+      messageDiv.appendChild(contentDiv);
+      responsesDiv.appendChild(messageDiv);
+      this.messageComplete = true;
+      this.scrollToBottom();
+      this.lastMessageTime = now;
+      return;
+    }
+    if (this.currentMessageElement && (now - this.lastMessageTime > this.pauseThreshold)) {
+      this.messageBuffer += '\n';
+    }
+    this.messageBuffer += text;
+    this.lastMessageTime = now;
+    if (!this.currentMessageElement) {
+      this.currentMessageElement = document.createElement('div');
+      this.currentMessageElement.className = 'message assistant-message';
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'markdown-content';
+      this.currentMessageElement.appendChild(contentDiv);
+      responsesDiv.appendChild(this.currentMessageElement);
+    }
+    const contentDiv = this.currentMessageElement.querySelector('.markdown-content');
+    contentDiv.innerHTML = this.formatMarkdown(this.messageBuffer);
+    if (
+      this.messageBuffer.match(/\n\n$/) ||
+      this.messageBuffer.match(/[.!?]\s+$/) ||
+      this.messageBuffer.match(/\n\s*[-*]\s.*\n\n$/)
+    ) {
+      this.finalizeMessage();
+    }
+    this.scrollToBottom();
+  }
+  finalizeMessage() {
+    this.messageBuffer = '';
+    this.currentMessageElement = null;
+    this.messageComplete = true;
+    this.lastMessageTime = Date.now();
+  }
+  scrollToBottom() {
+    responsesDiv.scrollTop = responsesDiv.scrollHeight;
+  }
+}
+
+const AudioProcessingWorklet = `
+		class AudioProcessor extends AudioWorkletProcessor {
+		  buffer = new Int16Array(2048);
+		  bufferWriteIndex = 0;
+		  process(inputs) {
+			if (inputs[0].length) {
+			  const samples = inputs[0][0];
+			  for (let i = 0; i < samples.length; i++) {
+				const int16Value = samples[i] * 32768;
+				this.buffer[this.bufferWriteIndex++] = int16Value;
+				if(this.bufferWriteIndex >= this.buffer.length) {
+				  this.port.postMessage({
+					data: { int16arrayBuffer: this.buffer.buffer }
+				  });
+				  this.bufferWriteIndex = 0;
+				}
+			  }
+			}
+			return true;
+		  }
+		}`;
+		
+const messageFormatter = new MessageFormatter();
+window.addEventListener('modelResponse', (event) => {
+  console.log(event.detail.text);
+  messageFormatter.appendMessage(event.detail.text);
+});
+
+let stream = null;
+const videoSelect = document.getElementById('videoSource');
+const audioSelect = document.getElementById('audioSource');
+const preview = document.getElementById('preview');
+const errorDisplay = document.getElementById('error');
+const responsesDiv = document.getElementById('responses');
+let publisher = null;
+
+function validateApiKey() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  startButton.disabled = !apiKey;
+  return apiKey;
+}
+
+document.getElementById('apiKey').value = localStorage.getItem('apiKey') || '';
+validateApiKey();
+document.getElementById('apiKey').addEventListener('input', validateApiKey);
+
+startButton.addEventListener('click', async () => {
+  const apiKeyInput = document.getElementById('apiKey');
+  const apiKey = apiKeyInput.value.trim();
+  if (!apiKey) {
+    apiKeyInput.classList.add('highlight');
+    setTimeout(() => apiKeyInput.classList.remove('highlight'), 2000);
+    return;
+  }
+  try {
+    if (publisher) {
+      startButton.textContent = 'Starting...';
+      startButton.disabled = true;
+      publisher.stop();
+      publisher = null;
+      preview.srcObject = null;
+      startButton.textContent = 'Start Stream';
+      startButton.disabled = false;
+      return;
+    }
+    startButton.textContent = 'Starting...';
+    startButton.disabled = true;
+    const stream = await getStream();
+    preview.srcObject = stream;
+    localStorage.setItem('apiKey', apiKey);
+    publisher = new GoogleLivePublisher(stream, apiKey);
+    await publisher.start();
+    startButton.textContent = 'Stop Stream';
+    startButton.disabled = false;
+  } catch (err) {
+    console.error(err);
+    showError('Failed to start publishing: ' + err.message);
+    startButton.textContent = 'Start Stream';
+    startButton.disabled = false;
+  }
+});
+
+async function getDevices() {
+  try {
+    await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: true
+      })
+      .then(stream => stream.getTracks().forEach(track => track.stop()))
+      .catch(e => console.warn('Permission denied:', e));
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter(d => d.kind === 'videoinput');
+    const audioDevices = devices.filter(d => d.kind === 'audioinput');
+    videoDevices.forEach(device => {
+      const option = document.createElement('option');
+      option.value = device.deviceId;
+      option.text = device.label || `Camera ${videoSelect.length + 1}`;
+      videoSelect.appendChild(option);
+    });
+    audioDevices.forEach(device => {
+      const option = document.createElement('option');
+      option.value = device.deviceId;
+      option.text = device.label || `Microphone ${audioSelect.length + 1}`;
+      audioSelect.appendChild(option);
+    });
+  } catch (err) {
+    showError('Failed to get devices: ' + err.message);
+  }
+}
+
+async function getStream() {
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+  }
+  const constraints = {
+    video: {
+      deviceId: videoSelect.value ? {
+        exact: videoSelect.value
+      } : undefined
+    },
+    audio: {
+      deviceId: audioSelect.value ? {
+        exact: audioSelect.value
+      } : undefined
+    }
+  };
+  try {
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    preview.srcObject = stream;
+    return stream;
+  } catch (err) {
+    showError('Failed to get stream: ' + err.message);
+    throw err;
+  }
+}
+
+function showError(message) {
+  errorDisplay.textContent = message;
+}
+
+if (!navigator.mediaDevices?.getUserMedia) {
+  showError('getUserMedia not supported');
+} else {
+  navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true
+    })
+    .then(initialStream => {
+      initialStream.getTracks().forEach(track => track.stop());
+      getDevices();
+    })
+    .catch(err => showError('Initial permission request failed: ' + err.message));
+  navigator.mediaDevices.addEventListener('devicechange', getDevices);
+}
+
+const messageInput = document.querySelector('.message-input');
+const sendButton = document.querySelector('#sendButton');
+responsesDiv.parentElement.insertBefore(messageInput, responsesDiv);
+responsesDiv.parentElement.insertBefore(sendButton, responsesDiv);
+
+sendButton.addEventListener('click', async () => {
+  if (!publisher) {
+    showError('Please start the stream first');
+    return;
+  }
+  if (messageInput.value.trim()) {
+    try {
+      messageFormatter.appendMessage(messageInput.value, true);
+      await publisher.sendPrompt(messageInput.value);
+      messageInput.value = '';
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      showError('Failed to send message: ' + err.message);
+    }
+  }
+});
+
+messageInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    sendButton.click();
+  }
+});
+
+</script>
+</body>
+</html>
+
