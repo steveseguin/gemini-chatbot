@@ -143,6 +143,11 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
+## Credit
+
+Reference for this code was sourced from https://github.com/google-gemini/multimodal-live-api-web-console
+Apache License v2.0 - google-gemini
+
 ## Author
 
 Steve Seguin  
