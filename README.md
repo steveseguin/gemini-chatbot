@@ -31,6 +31,50 @@ A real-time video chat interface powered by Google's Gemini Vision AI, enabling 
 - AudioWorklet for audio processing
 - Canvas API for video frame capture
 
+## Technical Implementation
+
+### Audio Pipeline
+1. **Input Capture**
+   - Uses `getUserMedia()` to access microphone input
+   - Creates `AudioContext` with 16kHz sample rate
+   - Processes audio through `AudioWorkletNode`
+
+2. **Audio Processing**
+   - Audio chunks processed in 2048-sample buffers
+   - Input samples converted to 16-bit PCM integers (range: -32768 to 32767)
+   - AudioWorklet runs in separate thread for efficient processing
+   - Continuous stream maintained through buffer management
+
+3. **Audio Transmission**
+   - Audio data encoded as base64 strings
+   - Sent via WebSocket with MIME type: "audio/pcm;rate=16000"
+   - Chunks sent at ~86ms intervals (2048 samples at 16kHz)
+
+### Video Pipeline
+1. **Video Capture**
+   - Camera input accessed via `getUserMedia()`
+   - Frames captured at 640x360 resolution
+   - Processing rate: 1 frame every 200ms (5 FPS)
+
+2. **Frame Processing**
+   - Each frame drawn to offscreen canvas
+   - Converted to JPEG format with 0.8 quality
+   - Base64 encoded for transmission
+   - MIME type: "image/jpeg"
+
+### Receiving Audio Response
+1. **Audio Reception**
+   - Received as base64-encoded PCM data
+   - 24kHz sample rate for playback
+   - Processed in chunks with 8192*4 buffer size
+
+2. **Playback Management**
+   - Adaptive buffer target (default: 3 buffers)
+   - 15ms silence padding between chunks
+   - 50ms initial start delay
+   - Underrun recovery with 200ms threshold
+   - Gain ramping for smooth transitions
+
 ## Setup and Usage
 
 1. Clone the repository
