@@ -27,13 +27,11 @@ Try it now: [Gemini Vision Chat Demo](https://steveseguin.github.io/gemini-chatb
 ## Prerequisites
 
 - Google Gemini API key (obtain from [Google AI Studio](https://aistudio.google.com/app/apikey))
-- Modern web browser with WebRTC support
 - Webcam and microphone access
 
 ## Technical Stack
 
 - Vanilla JavaScript
-- WebRTC for media streaming
 - WebSocket for real-time communication
 - Web Audio API for sound processing
 - AudioWorklet for audio processing
@@ -74,7 +72,7 @@ Try it now: [Gemini Vision Chat Demo](https://steveseguin.github.io/gemini-chatb
 1. **Audio Reception**
    - Received as base64-encoded PCM data
    - 24kHz sample rate for playback
-   - Processed in chunks with 8192*4 buffer size
+   - Processed in chunks with 32768 buffer size
 
 2. **Playback Management**
    - Adaptive buffer target (default: 3 buffers)
