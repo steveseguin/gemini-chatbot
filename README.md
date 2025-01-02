@@ -4,6 +4,12 @@ A real-time video chat interface powered by Google's Gemini Vision AI, enabling 
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
+## Live Demo
+
+Try it now: [Gemini Vision Chat Demo](https://steveseguin.github.io/gemini-chatbot)
+
+> **Note:** You'll need your own Gemini API key to use the demo. Get one for free at [Google AI Studio](https://aistudio.google.com/app/apikey).
+
 ## Features
 
 - Real-time video and audio streaming with Gemini Vision AI
