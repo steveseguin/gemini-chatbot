@@ -452,6 +452,7 @@ class GoogleLivePublisher {
         videoElement.srcObject = new MediaStream([videoTrack]);
         videoElement.autoplay = true;
         const captureFrame = () => {
+            if (this.stopped) return;
             const now = Date.now();
             if (now - this.lastImageTime >= this.imageInterval) {
                 this.canvasContext.drawImage(videoElement, 0, 0, this.imageWidth, this.imageHeight);
@@ -481,7 +482,9 @@ class GoogleLivePublisher {
         }
     }
     stop() {
+        if (this.stopped) return;
         this.stopped = true;
+        this.stream?.getTracks().forEach(track => track.stop());
         this.ws?.close();
         this.audioContext?.close();
         this.audioPlayer?.stop();
@@ -772,6 +775,34 @@ const errorDisplay = document.getElementById('error');
 const responsesDiv = document.getElementById('responses');
 let publisher = null;
 
+function stopPublisher(target) {
+    if (!target) return;
+    target.stop();
+    if (publisher !== target) return;
+    publisher = null;
+    if (stream === target.stream) stream = null;
+    if (preview.srcObject === target.stream) preview.srcObject = null;
+}
+
+async function startPublisher(apiKey) {
+    const acquiredStream = await getStream();
+    let target = null;
+    try {
+        target = new GoogleLivePublisher(acquiredStream, apiKey);
+        publisher = target;
+        await target.start();
+    } catch (err) {
+        if (target) {
+            stopPublisher(target);
+        } else {
+            acquiredStream.getTracks().forEach(track => track.stop());
+            if (stream === acquiredStream) stream = null;
+            if (preview.srcObject === acquiredStream) preview.srcObject = null;
+        }
+        throw err;
+    }
+}
+
 function validateApiKey() {
     const apiKey = document.getElementById('apiKey').value.trim();
     startButton.disabled = !apiKey;
@@ -792,20 +823,15 @@ startButton.addEventListener('click', async () => {
         if (publisher) {
             startButton.textContent = 'Starting...';
             startButton.disabled = true;
-            publisher.stop();
-            publisher = null;
-            preview.srcObject = null;
+            stopPublisher(publisher);
             startButton.textContent = 'Start Stream';
             startButton.disabled = false;
             return;
         }
         startButton.textContent = 'Starting...';
         startButton.disabled = true;
-        const stream = await getStream();
-        preview.srcObject = stream;
         localStorage.setItem('apiKey', apiKey);
-        publisher = new GoogleLivePublisher(stream, apiKey);
-        await publisher.start();
+        await startPublisher(apiKey);
         startButton.textContent = 'Stop Stream';
         startButton.disabled = false;
     } catch (err) {
@@ -909,14 +935,10 @@ document.getElementById('voiceSelect').addEventListener('change', async () => {
     if (publisher && startButton.textContent === 'Stop Stream') {
         startButton.textContent = 'Starting...';
         startButton.disabled = true;
-        publisher.stop();
-        publisher = null;
+        stopPublisher(publisher);
         try {
-            const stream = await getStream();
-            preview.srcObject = stream;
             const apiKey = document.getElementById('apiKey').value;
-            publisher = new GoogleLivePublisher(stream, apiKey);
-            await publisher.start();
+            await startPublisher(apiKey);
             startButton.textContent = 'Stop Stream';
             startButton.disabled = false;
         } catch (err) {
@@ -933,15 +955,11 @@ document.getElementById('responseType').addEventListener('change', function() {
     if (publisher && startButton.textContent === 'Stop Stream') {
         startButton.textContent = 'Starting...';
         startButton.disabled = true;
-        publisher.stop();
-        publisher = null;
+        stopPublisher(publisher);
         (async () => {
             try {
-                const stream = await getStream();
-                preview.srcObject = stream;
                 const apiKey = document.getElementById('apiKey').value;
-                publisher = new GoogleLivePublisher(stream, apiKey);
-                await publisher.start();
+                await startPublisher(apiKey);
                 startButton.textContent = 'Stop Stream';
                 startButton.disabled = false;
             } catch (err) {
@@ -961,4 +979,5 @@ messageInput.addEventListener('keypress', (e) => {
 </script>
 </body>
 </html>
+
 
